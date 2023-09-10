@@ -1,0 +1,58 @@
+trigger:
+- master
+
+variables:
+  # Docker Hub registry credentials
+  dockerRegistry: $(DOCKER_REGISTRY)
+  dockerRegistryUsername: $(DOCKER_USERNAME)
+  dockerRegistryPassword: $(DOCKER_PASSWORD)
+  # Artifacts feed name
+  artifactsFeeds: eduproj
+  # Docker image information
+  dockerImageName: irfansample
+
+stages:
+- stage: Build
+  displayName: Build stage
+  jobs:
+  - job: BuildJob
+    displayName: Build job
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - checkout: self
+    - task: MavenAuthenticate@0
+      inputs:
+        artifactsFeeds: $(artifactsFeeds)
+    - task: Maven@3
+      inputs:
+        mavenPomFile: 'pom.xml'
+        options: '-B'
+        goals: 'clean package'
+        publishJUnitResults: true
+        testResultsFiles: '**/TEST-*.xml''**/surefire-reports/TEST-*.xml'
+
+- stage: DockerBuild
+  displayName: Docker build stage
+  jobs:
+  - job: DockerBuildJob
+    displayName: Docker build job
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'docker-test' # Replace with the name of your Docker Hub service connection
+        repository: $(DOCKER_REGISTRY)/$(dockerImageName)
+        command: 'build'
+        Dockerfile: '**/Dockerfile'
+        tags: $(Build.BuildId)
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'docker-test' # Replace with the name of your Docker Hub service connection
+        repository: $(dockerRegistry)$(dockerImageName)
+        command: 'push'
+        Dockerfile: '**/Dockerfile'
+        tags: $(Build.BuildId)
+        containerUsername: $(dockerRegistryUsername)
+        containerPassword: $(dockerRegistryPassword)
